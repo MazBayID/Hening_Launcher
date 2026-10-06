@@ -1,5 +1,18 @@
 # Hening
 
+<p align="center">
+  <!-- Menampilkan GIF di tengah -->
+  <img src="Screen-gif.gif" alt="Demo GIF" width="500" />
+</p>
+
+<p align="center">
+  <!-- Menampilkan dua PNG bersebelahan di bawah GIF -->
+  <img src="Screen-2.png" alt="Gambar 1" width="250" />
+  <img src="Screen-1.png" alt="Gambar 2" width="250" />
+</p>
+
+
+
 Launcher Android minimalis dengan tema terminal untuk programmer. Ide fitur terinspirasi Niagara Launcher dan Olauncher,
 ditulis sendiri dari nol dengan Kotlin dan Jetpack Compose. Tanpa ikon di beranda, tanpa iklan, tanpa internet.
 
