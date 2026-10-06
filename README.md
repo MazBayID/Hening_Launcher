@@ -6,7 +6,7 @@ ditulis sendiri dari nol dengan Kotlin dan Jetpack Compose. Tanpa ikon di berand
 ## Fitur versi 0.2
 
 **Tema**
-- Kursor berkedip, nomor favorit, komentar `// tanggal`, dan Ruang sebagai `~/santai`.
+- Beranda **Monospace** Kursor berkedip, nomor favorit, komentar `// tanggal`, dan Ruang sebagai `~/santai`.
 - Font **monospace** di seluruh aplikasi (bisa dimatikan) dan 10 tema warna: Terminal, Matrix, Dracula, Monokai, Nord, Gruvbox, Solarized, One Dark, Hitam, Putih.
 - Gaya **Minimal** tersedia untuk tampilan polos.
 
