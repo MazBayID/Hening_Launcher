@@ -38,6 +38,8 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
+import androidx.compose.animation.core.*
+
 
 private val TANGGAL = DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("id", "ID"))
 
