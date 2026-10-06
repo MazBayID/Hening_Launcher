@@ -5,8 +5,8 @@ ditulis sendiri dari nol dengan Kotlin dan Jetpack Compose. Tanpa ikon di berand
 
 ## Fitur versi 0.2
 
-**Tema coding**
-- Gaya **Terminal**: prompt `hening@santai:~$ date` dengan kursor berkedip, nomor favorit, komentar `// tanggal`, dan Ruang sebagai `~/santai`.
+**Tema**
+- Kursor berkedip, nomor favorit, komentar `// tanggal`, dan Ruang sebagai `~/santai`.
 - Font **monospace** di seluruh aplikasi (bisa dimatikan) dan 10 tema warna: Terminal, Matrix, Dracula, Monokai, Nord, Gruvbox, Solarized, One Dark, Hitam, Putih.
 - Gaya **Minimal** tersedia untuk tampilan polos.
 
