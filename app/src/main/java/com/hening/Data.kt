@@ -7,15 +7,29 @@ import android.net.Uri
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.graphics.Color
 
-data class App(val label: String, val pkg: String, val komponen: ComponentName)
+data class App(val label: String, val pkg: String, val komponen: ComponentName, val terpasang: Long)
 
-data class Tema(val nama: String, val bg: Color, val fg: Color, val gelap: Boolean)
+data class Tema(
+    val nama: String,
+    val bg: Color,
+    val fg: Color,
+    val aksen: Color,
+    val aksen2: Color,
+    val redup: Color,
+    val gelap: Boolean,
+)
 
 val daftarTema = listOf(
-    Tema("Hitam", Color(0xFF000000), Color(0xFFFFFFFF), true),
-    Tema("Abu gelap", Color(0xFF16181D), Color(0xFFECEFF4), true),
-    Tema("Biru malam", Color(0xFF0B132B), Color(0xFFE0E6F5), true),
-    Tema("Putih", Color(0xFFF7F7F5), Color(0xFF111111), false),
+    Tema("Terminal", Color(0xFF0C0C0C), Color(0xFFD0D0D0), Color(0xFF00E676), Color(0xFF40C4FF), Color(0xFF6B7280), true),
+    Tema("Matrix", Color(0xFF000000), Color(0xFF33FF66), Color(0xFF00FF41), Color(0xFF00B32C), Color(0xFF1B7A2F), true),
+    Tema("Dracula", Color(0xFF282A36), Color(0xFFF8F8F2), Color(0xFFBD93F9), Color(0xFF50FA7B), Color(0xFF6272A4), true),
+    Tema("Monokai", Color(0xFF272822), Color(0xFFF8F8F2), Color(0xFFA6E22E), Color(0xFFF92672), Color(0xFF75715E), true),
+    Tema("Nord", Color(0xFF2E3440), Color(0xFFECEFF4), Color(0xFF88C0D0), Color(0xFFA3BE8C), Color(0xFF616E88), true),
+    Tema("Gruvbox", Color(0xFF282828), Color(0xFFEBDBB2), Color(0xFFFABD2F), Color(0xFFB8BB26), Color(0xFF928374), true),
+    Tema("Solarized", Color(0xFF002B36), Color(0xFF93A1A1), Color(0xFF2AA198), Color(0xFFB58900), Color(0xFF586E75), true),
+    Tema("One Dark", Color(0xFF282C34), Color(0xFFABB2BF), Color(0xFF61AFEF), Color(0xFF98C379), Color(0xFF5C6370), true),
+    Tema("Hitam", Color(0xFF000000), Color(0xFFFFFFFF), Color(0xFFB0BEC5), Color(0xFF90CAF9), Color(0xFF757575), true),
+    Tema("Putih", Color(0xFFF7F7F5), Color(0xFF111111), Color(0xFF1565C0), Color(0xFF2E7D32), Color(0xFF757575), false),
 )
 
 /** Membaca daftar aplikasi. Tanpa ikon, jadi ringan dan cepat. */
@@ -26,7 +40,8 @@ object Aplikasi {
         return pm.queryIntentActivities(q, 0).mapNotNull { ri ->
             val ai = ri.activityInfo ?: return@mapNotNull null
             if (ai.packageName == ctx.packageName) return@mapNotNull null
-            App(ri.loadLabel(pm).toString(), ai.packageName, ComponentName(ai.packageName, ai.name))
+            val waktu = try { pm.getPackageInfo(ai.packageName, 0).firstInstallTime } catch (e: Exception) { 0L }
+            App(ri.loadLabel(pm).toString(), ai.packageName, ComponentName(ai.packageName, ai.name), waktu)
         }.distinctBy { it.pkg }.sortedBy { it.label.lowercase() }
     }
 }
@@ -60,6 +75,8 @@ class Pengaturan(context: Context) {
     private fun taruhDaftar(k: String, l: List<String>) = taruh(k, l.joinToString(","))
 
     val tema: Tema get() = daftarTema[int("tema", 0).coerceIn(0, daftarTema.lastIndex)]
+    val gaya: Int get() = int("gaya", 0)
+    val mono: Boolean get() = bool("mono", true)
     val ruang: Int get() = int("ruang", 0)
     val jumlahFav: Int get() = int("jumlah", 6)
     val rata: Int get() = int("rata", 0)
@@ -73,6 +90,15 @@ class Pengaturan(context: Context) {
 
     fun namaRuang(r: Int): String = str("ruang$r", if (r == 0) "Santai" else "Kerja")
     fun favorit(r: Int = ruang): List<String> = daftar("fav$r")
+
+    /** Favorit untuk ditampilkan: urut manual, atau urut pemakaian bila diaktifkan. */
+    fun favoritUrut(r: Int = ruang): List<String> {
+        val l = favorit(r)
+        return if (bool("urutauto", false)) l.sortedByDescending { hit(it) } else l
+    }
+
+    fun hit(pkg: String): Int = int("hit:$pkg", 0)
+    fun catatBuka(pkg: String) = taruh("hit:$pkg", hit(pkg) + 1)
 
     /** Menambah atau menghapus favorit di Ruang aktif. False bila daftar sudah penuh. */
     fun toggleFav(pkg: String): Boolean {
@@ -95,6 +121,25 @@ class Pengaturan(context: Context) {
             l.add(i - 1, pkg)
             taruhDaftar("fav$ruang", l)
         }
+    }
+
+    fun turunFav(pkg: String) {
+        val l = favorit().toMutableList()
+        val i = l.indexOf(pkg)
+        if (i >= 0 && i < l.lastIndex) {
+            l.removeAt(i)
+            l.add(i + 1, pkg)
+            taruhDaftar("fav$ruang", l)
+        }
+    }
+
+    /** Grup: aplikasi yang bersembunyi di balik sebuah favorit (geser kanan pada favorit untuk membukanya). */
+    fun grup(induk: String): List<String> = daftar("grup:$induk")
+
+    fun toggleGrup(induk: String, pkg: String) {
+        val l = grup(induk).toMutableList()
+        if (!l.remove(pkg)) l.add(pkg)
+        taruhDaftar("grup:$induk", l)
     }
 
     fun toggleSembunyi(pkg: String) {
