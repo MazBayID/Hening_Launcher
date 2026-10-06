@@ -2,13 +2,13 @@
 
 <p align="center">
   <!-- Menampilkan GIF di tengah -->
-  <img src="screen-gif.gif" alt="Demo GIF" width="500" />
+  <img src="screen-gif.gif" alt="Demo GIF" width="100" />
 </p>
 
 <p align="center">
   <!-- Menampilkan dua PNG bersebelahan di bawah GIF -->
-  <img src="Screen-2.png" alt="Gambar 1" width="250" />
-  <img src="Screen-1.png" alt="Gambar 2" width="250" />
+  <img src="Screen-2.png" alt="Gambar 1" width="100" />
+  <img src="Screen-1.png" alt="Gambar 2" width="100" />
 </p>
 
 
