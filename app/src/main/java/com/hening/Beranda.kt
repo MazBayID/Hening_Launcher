@@ -115,11 +115,13 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
                         when {
                             !mendatar && total.y < -size.height * 0.10f -> onLaci()
                             !mendatar && total.y > size.height * 0.10f -> Peluncur.bukaNotifikasi(ctx)
-                            mendatar && total.x < -size.width * 0.25f -> Peluncur.pintasan(ctx, apps, pkgKanan, false, p)
-                            mendatar && total.x > size.width * 0.25f -> Peluncur.pintasan(ctx, apps, pkgKiri, true, p)
+                            // Jika digeser mendatar, ganti ruang/mode santai dan kerja
+                            mendatar && total.x < -size.width * 0.25f -> p.taruh("ruang", if (p.ruang == 0) 1 else 0)
+                            mendatar && total.x > size.width * 0.25f -> p.taruh("ruang", if (p.ruang == 0) 1 else 0)
                         }
                     },
                 ) { _, d -> total += d }
+                
             }
             .padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = rata,
@@ -212,14 +214,7 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
 
         Spacer(Modifier.weight(1f))
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (terminal) "[$labelKiri]" else labelKiri,
-                color = if (terminal) t.aksen2 else t.fg.copy(alpha = 0.8f),
-                fontSize = 14.sp,
-                maxLines = 1,
-                modifier = Modifier.clickable { Peluncur.pintasan(ctx, apps, pkgKiri, true, p) }.padding(vertical = 8.dp),
-            )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 listOf(0, 1).forEach { r ->
                     val nama = p.namaRuang(r).lowercase()
@@ -232,14 +227,7 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
                     )
                 }
             }
-            Text(
-                if (terminal) "[$labelKanan]" else labelKanan,
-                color = if (terminal) t.aksen2 else t.fg.copy(alpha = 0.8f),
-                fontSize = 14.sp,
-                maxLines = 1,
-                modifier = Modifier.clickable { Peluncur.pintasan(ctx, apps, pkgKanan, false, p) }.padding(vertical = 8.dp),
-            )
-        }
+        } 
     }
 }
 
