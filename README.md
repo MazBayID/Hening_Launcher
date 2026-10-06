@@ -2,7 +2,7 @@
 
 <p align="center">
   <!-- Menampilkan GIF di tengah -->
-  <img src="Screen-gif.gif" alt="Demo GIF" width="500" />
+  <img src="screen-gif.gif" alt="Demo GIF" width="500" />
 </p>
 
 <p align="center">
