@@ -95,6 +95,7 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
         label = "alfa",
     )
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
             .fillMaxSize()
@@ -121,7 +122,7 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
                     },
                 ) { _, d -> total += d }
             }
-            .padding(horizontal = 24.dp, vertical = 20.dp),
+            .padding(start = 24.dp, end = if (p.bool("alfabetberanda", true)) 44.dp else 24.dp, top = 20.dp, bottom = 20.dp),
         horizontalAlignment = rata,
     ) {
         if (terminal) {
@@ -240,6 +241,10 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
                 modifier = Modifier.clickable { Peluncur.pintasan(ctx, apps, pkgKanan, false, p) }.padding(vertical = 8.dp),
             )
         }
+    }
+    if (p.bool("alfabetberanda", true)) {
+        AlfabetBeranda(apps, p, Modifier.align(Alignment.CenterEnd).statusBarsPadding().navigationBarsPadding())
+    }
     }
 }
 

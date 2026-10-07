@@ -3,6 +3,8 @@
 package com.hening
 
 import android.Manifest
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -22,6 +24,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /** Layar pengaturan, dibuka dengan menekan lama beranda atau perintah :set. */
 @Composable
@@ -34,6 +40,20 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
     var pilihKanan by remember { mutableStateOf(false) }
     val versi = remember {
         try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName } catch (e: Exception) { "?" }
+    }
+    val scope = rememberCoroutineScope()
+    val pilihFoto = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                val ok = withContext(Dispatchers.IO) { Foto.simpan(ctx, uri) }
+                if (ok) {
+                    p.taruh("wall", 2)
+                    p.taruh("foto_versi", p.int("foto_versi", 0) + 1)
+                } else {
+                    Toast.makeText(ctx, "Foto tidak bisa dipakai", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
     val izinKalender = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         p.taruh("agenda", ok)
@@ -66,6 +86,29 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
             Sakelar("Format 24 jam", p.jam24) { p.taruh("jam24", it) }
             Sakelar("Sembunyikan status bar", p.bool("hidestatus", false)) { p.taruh("hidestatus", it) }
 
+            Judul("Wallpaper")
+            Pilihan("Latar", listOf("Polos", "Gradien", "Foto"), p.int("wall", 0)) { p.taruh("wall", it) }
+            if (p.int("wall", 0) == 1) {
+                Pilihan("Gradien", daftarGradien.map { it.nama }, p.int("gradien", 0)) { p.taruh("gradien", it) }
+            }
+            if (p.int("wall", 0) == 2) {
+                OutlinedButton(onClick = { pilihFoto.launch("image/*") }) { Text("Pilih foto dari galeri") }
+                OutlinedButton(onClick = {
+                    Foto.hapus(ctx)
+                    LatarCache.bitmap = null
+                    p.taruh("wall", 0)
+                }) { Text("Hapus foto") }
+            }
+            if (p.int("wall", 0) != 0) {
+                Text("Peredup latar: ${p.int("scrim", 55)}%", color = MaterialTheme.colorScheme.primary, fontSize = 15.sp)
+                Slider(
+                    value = p.int("scrim", 55) / 100f,
+                    onValueChange = { p.taruh("scrim", (it * 100).roundToInt()) },
+                    valueRange = 0f..0.9f,
+                )
+                Teks("Peredup memakai warna tema supaya teks tetap terbaca di atas gradien atau foto.")
+            }
+
             Judul("Favorit dan Ruang")
             Sakelar("Urutkan favorit otomatis menurut pemakaian", p.bool("urutauto", false)) { p.taruh("urutauto", it) }
             Sakelar("Ganti Ruang otomatis (Kerja Sen-Jum 08.00-17.00)", p.bool("autoruang", false)) { p.taruh("autoruang", it) }
@@ -81,7 +124,8 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
             Teks("Geser kanan pada sebuah favorit untuk membuka grupnya. Tekan lama aplikasi lalu pilih Masukkan ke grup favorit.")
 
             Judul("Daftar aplikasi")
-            Sakelar("Tampilkan penggeser alfabet", p.bool("alfabet", true)) { p.taruh("alfabet", it) }
+            Sakelar("Abjad melengkung di sisi kanan beranda", p.bool("alfabetberanda", true)) { p.taruh("alfabetberanda", it) }
+            Sakelar("Penggeser alfabet di daftar aplikasi", p.bool("alfabet", true)) { p.taruh("alfabet", it) }
             Sakelar("Getaran halus pada penggeser", p.bool("haptik", true)) { p.taruh("haptik", it) }
             Sakelar("Buka otomatis bila hanya satu hasil", p.autoBuka) { p.taruh("autobuka", it) }
             Sakelar("Munculkan keyboard saat membuka daftar", p.autoKeyboard) { p.taruh("autokeyboard", it) }

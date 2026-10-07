@@ -104,14 +104,9 @@ fun Laci(apps: List<App>, p: Pengaturan, bukaPengaturan: () -> Unit, tutup: () -
     }
     DisposableEffect(Unit) { onDispose { keyboard?.hide() } }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(t.bg)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
-    ) {
+    Box(Modifier.fillMaxSize().background(t.bg)) {
+    LatarBelakang(p, t)
+    Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
         Column(Modifier.fillMaxSize()) {
             OutlinedTextField(
                 value = cari,
@@ -190,6 +185,7 @@ fun Laci(apps: List<App>, p: Pengaturan, bukaPengaturan: () -> Unit, tutup: () -
                 contentAlignment = Alignment.Center,
             ) { Text(it.toString(), color = t.aksen, fontSize = 44.sp) }
         }
+    }
     }
 }
 

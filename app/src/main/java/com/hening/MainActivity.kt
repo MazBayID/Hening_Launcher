@@ -67,6 +67,9 @@ fun Root(p: Pengaturan, versi: Int, sinyalHome: Int) {
         p.isiAwal(apps.map { it.pkg }.toSet())
     }
     LaunchedEffect(sinyalHome) { laci = false; pengaturan = false }
+    LaunchedEffect(p.int("foto_versi", 0), p.int("wall", 0)) {
+        LatarCache.bitmap = if (p.int("wall", 0) == 2) withContext(Dispatchers.IO) { Foto.muat(ctx) } else null
+    }
 
     // Ganti Ruang otomatis: Kerja pada hari kerja 08.00-17.00, selain itu Santai.
     val autoRuang = p.bool("autoruang", false)
@@ -112,6 +115,7 @@ fun Root(p: Pengaturan, versi: Int, sinyalHome: Int) {
     MaterialTheme(colorScheme = skala, typography = tipografi(fam)) {
         CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = fam)) {
             Box(Modifier.fillMaxSize().background(tema.bg)) {
+                LatarBelakang(p, tema)
                 Beranda(apps, p, onLaci = { laci = true }, onPengaturan = { pengaturan = true })
                 AnimatedVisibility(
                     visible = laci,
