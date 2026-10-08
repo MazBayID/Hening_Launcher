@@ -81,6 +81,18 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
         }
     }
 
+    val tampilWaktu = p.bool("tampilwaktu", false)
+    val waktuLayar by produceState(0L, tampilWaktu, apps) {
+        while (true) {
+            value = if (tampilWaktu && Waktu.izin(ctx)) {
+                withContext(Dispatchers.IO) { Waktu.hariIni(ctx).filterKeys { k -> k in petaApp }.values.sum() }
+            } else {
+                0L
+            }
+            delay(60_000)
+        }
+    }
+
     var sekarang by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -101,23 +113,23 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .pointerInput(Unit) {
+            .pointerInput(apps) {
                 detectTapGestures(
-                    onDoubleTap = { Peluncur.kunciLayar(ctx) },
-                    onLongPress = { onPengaturan() },
+                    onDoubleTap = { Gestur.jalankan("dobel", ctx, p, apps, onLaci, onPengaturan) },
+                    onLongPress = { Gestur.jalankan("tekan", ctx, p, apps, onLaci, onPengaturan) },
                 )
             }
-            .pointerInput(Unit) {
+            .pointerInput(apps) {
                 var total = Offset.Zero
                 detectDragGestures(
                     onDragStart = { total = Offset.Zero },
                     onDragEnd = {
                         val mendatar = abs(total.x) > abs(total.y) * 1.5f
                         when {
-                            !mendatar && total.y < -size.height * 0.10f -> onLaci()
-                            !mendatar && total.y > size.height * 0.10f -> Peluncur.bukaNotifikasi(ctx)
-                            mendatar && total.x < -size.width * 0.25f -> Peluncur.pintasan(ctx, apps, pkgKanan, false, p)
-                            mendatar && total.x > size.width * 0.25f -> Peluncur.pintasan(ctx, apps, pkgKiri, true, p)
+                            !mendatar && total.y < -size.height * 0.10f -> Gestur.jalankan("atas", ctx, p, apps, onLaci, onPengaturan)
+                            !mendatar && total.y > size.height * 0.10f -> Gestur.jalankan("bawah", ctx, p, apps, onLaci, onPengaturan)
+                            mendatar && total.x < -size.width * 0.25f -> Gestur.jalankan("kiri", ctx, p, apps, onLaci, onPengaturan)
+                            mendatar && total.x > size.width * 0.25f -> Gestur.jalankan("kanan", ctx, p, apps, onLaci, onPengaturan)
                         }
                     },
                 ) { _, d -> total += d }
@@ -140,20 +152,17 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
                 Text("█", color = t.aksen, fontSize = 13.sp, modifier = Modifier.graphicsLayer { alpha = kursor.value })
             }
         }
-        if (p.tampilJam) {
-            Text(
-                sekarang.format(DateTimeFormatter.ofPattern(if (p.jam24) "HH:mm" else "h:mm")),
-                color = if (terminal) t.aksen else t.fg,
-                fontSize = 58.sp,
-                fontWeight = FontWeight.Light,
-            )
-        }
+        if (p.tampilJam) JamBeranda(sekarang, p, t, terminal, rata)
         if (p.tampilTanggal) {
             Text(
                 (if (terminal) "// " else "") + sekarang.format(TANGGAL),
                 color = if (terminal) t.redup else t.fg.copy(alpha = 0.7f),
                 fontSize = 14.sp,
             )
+        }
+        val layar = waktuLayar
+        if (layar > 0L) {
+            Text("◷ layar hari ini: " + Waktu.format(layar), color = t.redup, fontSize = 12.sp)
         }
         val ag = agenda
         if (ag != null) {
@@ -243,7 +252,11 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
         }
     }
     if (p.bool("alfabetberanda", true)) {
-        AlfabetBeranda(apps, p, Modifier.align(Alignment.CenterEnd).statusBarsPadding().navigationBarsPadding())
+        AlfabetBeranda(
+            apps, p,
+            Modifier.align(Alignment.CenterEnd).statusBarsPadding().navigationBarsPadding(),
+            onGestur = { Gestur.jalankan(it, ctx, p, apps, onLaci, onPengaturan) },
+        )
     }
     }
 }
@@ -344,7 +357,9 @@ fun MenuApp(a: App, p: Pengaturan, apps: List<App>, tampil: Boolean, tutup: () -
     val ctx = LocalContext.current
     var ganti by remember { mutableStateOf(false) }
     var pilihGrup by remember { mutableStateOf(false) }
+    var dialogBatas by remember { mutableStateOf(false) }
     val fav = a.pkg in p.favorit()
+    val pantau = p.bool("pantau:${a.pkg}", false)
 
     DropdownMenu(expanded = tampil, onDismissRequest = tutup) {
         Butir(if (fav) "Hapus dari favorit" else "Jadikan favorit (${p.namaRuang(p.ruang)})") {
@@ -356,6 +371,15 @@ fun MenuApp(a: App, p: Pengaturan, apps: List<App>, tampil: Boolean, tutup: () -
             Butir("Pindah ke bawah") { tutup(); p.turunFav(a.pkg) }
         }
         Butir("Masukkan ke grup favorit…") { tutup(); pilihGrup = true }
+        if (Waktu.izin(ctx)) {
+            DropdownMenuItem(
+                text = { Text("Hari ini: " + Waktu.format(Waktu.hariIni(ctx)[a.pkg] ?: 0L)) },
+                onClick = {},
+                enabled = false,
+            )
+        }
+        Butir(if (pantau) "Jeda sadar: aktif (ketuk untuk matikan)" else "Aktifkan jeda sadar") { tutup(); p.taruh("pantau:${a.pkg}", !pantau) }
+        Butir("Batas harian…") { tutup(); dialogBatas = true }
         Butir("Ganti nama") { tutup(); ganti = true }
         Butir("Sembunyikan") { tutup(); p.toggleSembunyi(a.pkg) }
         Butir("Info aplikasi") { tutup(); Peluncur.info(ctx, a) }
@@ -369,6 +393,32 @@ fun MenuApp(a: App, p: Pengaturan, apps: List<App>, tampil: Boolean, tutup: () -
             text = { OutlinedTextField(value = teks, onValueChange = { teks = it }, singleLine = true) },
             confirmButton = { TextButton(onClick = { p.setNama(a.pkg, teks); ganti = false }) { Text("Simpan") } },
             dismissButton = { TextButton(onClick = { p.setNama(a.pkg, ""); ganti = false }) { Text("Reset") } },
+        )
+    }
+    if (dialogBatas) {
+        var menit by remember { mutableStateOf(p.int("batas:${a.pkg}", 0).toString()) }
+        AlertDialog(
+            onDismissRequest = { dialogBatas = false },
+            title = { Text("Batas harian") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = menit,
+                        onValueChange = { menit = it.filter { c -> c.isDigit() }.take(4) },
+                        label = { Text("Menit per hari (0 = tanpa batas)") },
+                        singleLine = true,
+                    )
+                    Text(
+                        "Bila batas tercapai, layar jeda sadar tampil lebih lama sebelum aplikasi terbuka.",
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { p.taruh("batas:${a.pkg}", menit.toIntOrNull() ?: 0); dialogBatas = false }) { Text("Simpan") }
+            },
+            dismissButton = { TextButton(onClick = { dialogBatas = false }) { Text("Batal") } },
         )
     }
     if (pilihGrup) {

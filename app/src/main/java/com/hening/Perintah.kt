@@ -12,7 +12,7 @@ data class Aksi(val teks: String, val jalankan: () -> Unit)
  * Perintah gaya terminal di kolom pencarian:
  * "g kata" cari di web, "2+3*4" kalkulator, ":set", ":ruang", ":tema", ":kunci", ":baru", ":sering", ":help".
  */
-fun perintah(q: String, ctx: Context, p: Pengaturan, bukaPengaturan: () -> Unit, tutup: () -> Unit): List<Aksi> {
+fun perintah(q: String, ctx: Context, p: Pengaturan, apps: List<App>, bukaPengaturan: () -> Unit, tutup: () -> Unit): List<Aksi> {
     val hasil = mutableListOf<Aksi>()
     val teks = q.trim()
 
@@ -44,9 +44,21 @@ fun perintah(q: String, ctx: Context, p: Pengaturan, bukaPengaturan: () -> Unit,
             "set", "pengaturan" -> hasil.add(Aksi("buka pengaturan") { tutup(); bukaPengaturan() })
             "ruang" -> (0..1).filter { r -> arg.isBlank() || p.namaRuang(r).startsWith(arg, ignoreCase = true) }
                 .forEach { r -> hasil.add(Aksi("ruang › ${p.namaRuang(r)}") { p.taruh("ruang", r); tutup() }) }
-            "tema" -> daftarTema.forEachIndexed { i, tm ->
-                if (arg.isBlank() || tm.nama.startsWith(arg, ignoreCase = true)) {
-                    hasil.add(Aksi("tema › ${tm.nama}") { p.taruh("tema", i) })
+            "tema" -> namaTemaSemua().forEachIndexed { i, nama ->
+                if (arg.isBlank() || nama.startsWith(arg, ignoreCase = true)) {
+                    hasil.add(Aksi("tema › $nama") { p.taruh("tema", i) })
+                }
+            }
+            "waktu" -> {
+                if (!Waktu.izin(ctx)) {
+                    hasil.add(Aksi("izin Usage access belum diberikan (ketuk untuk membuka)") { Peluncur.aksesUsage(ctx) })
+                } else {
+                    val label = apps.associate { it.pkg to it.label }
+                    val data = Waktu.hariIni(ctx).filterKeys { it in label }
+                    hasil.add(Aksi("total hari ini: ${Waktu.format(data.values.sum())}") {})
+                    data.entries.sortedByDescending { it.value }.take(8).forEach { e ->
+                        hasil.add(Aksi(Waktu.format(e.value).padEnd(7) + (label[e.key] ?: e.key)) {})
+                    }
                 }
             }
             "kunci" -> hasil.add(Aksi("kunci layar") { tutup(); Peluncur.kunciLayar(ctx) })
@@ -57,6 +69,7 @@ fun perintah(q: String, ctx: Context, p: Pengaturan, bukaPengaturan: () -> Unit,
                 "2+3*4        kalkulator",
                 ":baru        aplikasi baru dipasang",
                 ":sering      aplikasi paling sering",
+                ":waktu       waktu layar hari ini",
                 ":ruang <n>   pindah ruang",
                 ":tema <n>    ganti tema",
                 ":kunci       kunci layar",

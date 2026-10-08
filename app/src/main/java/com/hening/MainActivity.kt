@@ -66,7 +66,11 @@ fun Root(p: Pengaturan, versi: Int, sinyalHome: Int) {
         apps = withContext(Dispatchers.IO) { Aplikasi.muat(ctx) }
         p.isiAwal(apps.map { it.pkg }.toSet())
     }
-    LaunchedEffect(sinyalHome) { laci = false; pengaturan = false }
+    LaunchedEffect(sinyalHome) { laci = false; pengaturan = false; Jeda.app = null }
+    val modeFont = p.int("font", if (p.bool("mono", true)) 0 else 1)
+    LaunchedEffect(p.int("font_versi", 0), modeFont) {
+        FontKustom.family = if (modeFont == 2) withContext(Dispatchers.IO) { FontKustom.muat(ctx) } else null
+    }
     LaunchedEffect(p.int("foto_versi", 0), p.int("wall", 0)) {
         LatarCache.bitmap = if (p.int("wall", 0) == 2) withContext(Dispatchers.IO) { Foto.muat(ctx) } else null
     }
@@ -86,7 +90,7 @@ fun Root(p: Pengaturan, versi: Int, sinyalHome: Int) {
         }
     }
     BackHandler {
-        if (pengaturan) pengaturan = false else laci = false
+        if (Jeda.app != null) Jeda.app = null else if (pengaturan) pengaturan = false else laci = false
     }
 
     val tema = p.tema
@@ -106,7 +110,11 @@ fun Root(p: Pengaturan, versi: Int, sinyalHome: Int) {
         }
     }
 
-    val fam = if (p.mono) FontFamily.Monospace else FontFamily.Default
+    val fam = when (modeFont) {
+        1 -> FontFamily.Default
+        2 -> FontKustom.family ?: FontFamily.Monospace
+        else -> FontFamily.Monospace
+    }
     val skala = if (tema.gelap) {
         darkColorScheme(primary = tema.fg, secondary = tema.aksen, tertiary = tema.aksen2)
     } else {
@@ -123,6 +131,7 @@ fun Root(p: Pengaturan, versi: Int, sinyalHome: Int) {
                     exit = slideOutVertically { it },
                 ) { Laci(apps, p, { pengaturan = true }) { laci = false } }
                 if (pengaturan) LayarPengaturan(apps, p) { pengaturan = false }
+                Jeda.app?.let { LayarJeda(it, p) }
             }
         }
     }

@@ -64,7 +64,7 @@ fun Laci(apps: List<App>, p: Pengaturan, bukaPengaturan: () -> Unit, tutup: () -
             .sortedBy { it.nama.lowercase() }
     }
     val q = cari.trim()
-    val aksi = remember(q) { perintah(q, ctx, p, bukaPengaturan, tutup) }
+    val aksi = remember(q) { perintah(q, ctx, p, apps, bukaPengaturan, tutup) }
     val hasil = remember(semua, q) {
         when {
             q == ":baru" -> semua.sortedByDescending { it.app.terpasang }.take(12)

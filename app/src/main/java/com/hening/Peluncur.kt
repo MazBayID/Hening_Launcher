@@ -14,6 +14,11 @@ import android.widget.Toast
 object Peluncur {
 
     fun buka(ctx: Context, app: App, p: Pengaturan? = null) {
+        if (p != null && Jeda.perlu(p, app.pkg)) {
+            Jeda.app = app
+            return
+        }
+        Jeda.lolos = null
         p?.catatBuka(app.pkg)
         mulai(
             ctx,
@@ -45,6 +50,7 @@ object Peluncur {
 
     fun pengaturanHome(ctx: Context) = mulai(ctx, Intent(Settings.ACTION_HOME_SETTINGS))
     fun aksesNotifikasi(ctx: Context) = mulai(ctx, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    fun aksesUsage(ctx: Context) = mulai(ctx, Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     fun aksesibilitas(ctx: Context) = mulai(ctx, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     fun bukaUrl(ctx: Context, url: String) = mulai(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 

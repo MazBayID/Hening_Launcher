@@ -3,6 +3,7 @@
 package com.hening
 
 import android.Manifest
+import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -29,19 +30,48 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-/** Layar pengaturan, dibuka dengan menekan lama beranda atau perintah :set. */
+private val DETIK_JEDA = listOf(3, 5, 8, 12)
+
+private fun tulis(ctx: Context, uri: Uri?, teks: String) {
+    if (uri == null) return
+    try {
+        ctx.contentResolver.openOutputStream(uri)?.use { it.write(teks.toByteArray()) }
+        Toast.makeText(ctx, "Tersimpan", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Toast.makeText(ctx, "Gagal menyimpan", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun baca(ctx: Context, uri: Uri?): String? {
+    if (uri == null) return null
+    return try {
+        ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+    } catch (e: Exception) {
+        null
+    }
+}
+
+/** Layar pengaturan, dibuka dengan menekan lama beranda (bila gestur bawaan) atau perintah :set. */
 @Composable
 fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
     val ctx = LocalContext.current
     val t = p.tema
+    val scope = rememberCoroutineScope()
     val petaApp = remember(apps) { apps.associateBy { it.pkg } }
     val peta = remember(p.str("nama")) { p.petaNama() }
     var pilihKiri by remember { mutableStateOf(false) }
     var pilihKanan by remember { mutableStateOf(false) }
+    var dialogSlot by remember { mutableStateOf<Int?>(null) }
     val versi = remember {
         try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName } catch (e: Exception) { "?" }
     }
-    val scope = rememberCoroutineScope()
+    val dataWaktu by produceState(emptyMap<String, Long>(), ctx) {
+        value = withContext(Dispatchers.IO) { Waktu.hariIni(ctx) }
+    }
+
+    val izinKalender = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        p.taruh("agenda", ok)
+    }
     val pilihFoto = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri != null) {
             scope.launch {
@@ -55,8 +85,36 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
             }
         }
     }
-    val izinKalender = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        p.taruh("agenda", ok)
+    val pilihFont = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                val ok = withContext(Dispatchers.IO) { FontKustom.simpan(ctx, uri) }
+                if (ok) {
+                    p.taruh("font", 2)
+                    p.taruh("font_versi", p.int("font_versi", 0) + 1)
+                } else {
+                    Toast.makeText(ctx, "Berkas font tidak valid", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+    val simpanTema = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        tulis(ctx, uri, p.eksporTema())
+    }
+    val bukaTema = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val s = baca(ctx, uri)
+        if (s != null) {
+            Toast.makeText(ctx, if (p.imporTema(s)) "Tema diimpor" else "Berkas tema tidak valid", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val simpanCadangan = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        tulis(ctx, uri, p.eksporSemua())
+    }
+    val bukaCadangan = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val s = baca(ctx, uri)
+        if (s != null) {
+            Toast.makeText(ctx, if (p.imporSemua(s)) "Cadangan dipulihkan" else "Berkas cadangan tidak valid", Toast.LENGTH_SHORT).show()
+        }
     }
 
     Column(
@@ -76,8 +134,20 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
         ) {
             Judul("Tampilan")
             Pilihan("Gaya beranda", listOf("Terminal", "Minimal"), p.gaya) { p.taruh("gaya", it) }
-            Pilihan("Tema warna", daftarTema.map { it.nama }, p.int("tema", 0)) { p.taruh("tema", it) }
-            Sakelar("Font monospace", p.mono) { p.taruh("mono", it) }
+            Pilihan("Tema warna", namaTemaSemua(), p.int("tema", 0)) { p.taruh("tema", it) }
+            Teks("Material You mengikuti warna wallpaper sistem (Android 12 ke atas).")
+            val modeFont = p.int("font", if (p.bool("mono", true)) 0 else 1)
+            Pilihan("Font", listOf("Monospace", "Sans", "Kustom"), modeFont) { p.taruh("font", it) }
+            if (modeFont == 2) {
+                OutlinedButton(onClick = { pilihFont.launch(arrayOf("*/*")) }) { Text("Pilih berkas font (.ttf / .otf)") }
+                OutlinedButton(onClick = {
+                    FontKustom.hapus(ctx)
+                    FontKustom.family = null
+                    p.taruh("font", 0)
+                }) { Text("Hapus font kustom") }
+                Teks("Contoh: JetBrains Mono atau Fira Code, unduh dari situs resminya lalu pilih berkas .ttf-nya.")
+            }
+            Pilihan("Gaya jam", listOf("Digital", "Analog", "Flip", "Bertumpuk"), p.int("gayajam", 0)) { p.taruh("gayajam", it) }
             Pilihan("Ukuran teks favorit", listOf("Kecil", "Sedang", "Besar"), p.ukuran) { p.taruh("ukuran", it) }
             Pilihan("Rata teks", listOf("Kiri", "Tengah", "Kanan"), p.rata) { p.taruh("rata", it) }
             Pilihan("Jumlah favorit", (3..8).map { "$it" }, p.jumlahFav - 3) { p.taruh("jumlah", it + 3) }
@@ -85,6 +155,21 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
             Sakelar("Tampilkan tanggal", p.tampilTanggal) { p.taruh("tanggal", it) }
             Sakelar("Format 24 jam", p.jam24) { p.taruh("jam24", it) }
             Sakelar("Sembunyikan status bar", p.bool("hidestatus", false)) { p.taruh("hidestatus", it) }
+
+            Judul("Editor tema")
+            Teks("Salin warna dari tema yang ada, lalu ubah sesukamu. Tema Kustom otomatis terpilih.")
+            Pilihan("Salin warna dari", daftarTema.map { it.nama }, -1) { p.salinKeKustom(daftarTema[it]) }
+            if (p.int("tema", 0) == 10) {
+                EditorWarna("Latar (bg)", "bg", p)
+                EditorWarna("Teks (fg)", "fg", p)
+                EditorWarna("Aksen utama", "aksen", p)
+                EditorWarna("Aksen kedua", "aksen2", p)
+                EditorWarna("Teks redup", "redup", p)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { simpanTema.launch("hening-tema.json") }) { Text("Ekspor tema") }
+                OutlinedButton(onClick = { bukaTema.launch(arrayOf("*/*")) }) { Text("Impor tema") }
+            }
 
             Judul("Wallpaper")
             Pilihan("Latar", listOf("Polos", "Gradien", "Foto"), p.int("wall", 0)) { p.taruh("wall", it) }
@@ -129,12 +214,62 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
             Sakelar("Getaran halus pada penggeser", p.bool("haptik", true)) { p.taruh("haptik", it) }
             Sakelar("Buka otomatis bila hanya satu hasil", p.autoBuka) { p.taruh("autobuka", it) }
             Sakelar("Munculkan keyboard saat membuka daftar", p.autoKeyboard) { p.taruh("autokeyboard", it) }
-            Teks("Perintah di kolom cari: g kata, 2+3*4, :baru, :sering, :ruang, :tema, :kunci, :set, :help")
+            Teks("Perintah di kolom cari: g kata, 2+3*4, :baru, :sering, :waktu, :ruang, :tema, :kunci, :set, :help")
+
+            Judul("Gestur")
+            Teks("Atur aksi untuk tiap gestur. Pintasan kiri dan kanan diatur di bagian berikutnya.")
+            Gestur.slot.forEachIndexed { i, s ->
+                val kode = Gestur.kode(p, s)
+                val ket = if (kode == 7) {
+                    "Buka " + (petaApp[p.str("gest_${s}_app")]?.let { peta[it.pkg] ?: it.label } ?: "(belum dipilih)")
+                } else {
+                    Gestur.aksi[kode.coerceIn(0, Gestur.aksi.lastIndex)]
+                }
+                BarisApp(Gestur.namaSlot[i], ket) { dialogSlot = i }
+            }
 
             Judul("Pintasan geser")
-            Teks("Geser kanan membuka pintasan kiri, geser kiri membuka pintasan kanan. Ketuk tulisan di bawah beranda untuk membukanya langsung.")
+            Teks("Aplikasi untuk aksi Pintasan kiri dan Pintasan kanan. Teks di bawah beranda juga membukanya langsung.")
             BarisApp("Pintasan kiri", petaApp[p.str("pintasan_kiri")]?.let { peta[it.pkg] ?: it.label } ?: "Telepon") { pilihKiri = true }
             BarisApp("Pintasan kanan", petaApp[p.str("pintasan_kanan")]?.let { peta[it.pkg] ?: it.label } ?: "Kamera") { pilihKanan = true }
+
+            Judul("Waktu layar dan jeda sadar")
+            val izinWaktu = Waktu.izin(ctx)
+            Teks("Usage access: " + if (izinWaktu) "aktif" else "nonaktif")
+            if (!izinWaktu) {
+                Teks("Dibutuhkan untuk menampilkan waktu layar per aplikasi dan batas harian.")
+                OutlinedButton(onClick = { Peluncur.aksesUsage(ctx) }) { Text("Buka pengaturan Usage access") }
+            }
+            Sakelar("Tampilkan waktu layar hari ini di beranda", p.bool("tampilwaktu", false)) { p.taruh("tampilwaktu", it) }
+            Pilihan("Lama jeda sadar", DETIK_JEDA.map { "$it dtk" }, DETIK_JEDA.indexOf(p.int("jedadetik", 5)).coerceAtLeast(0)) {
+                p.taruh("jedadetik", DETIK_JEDA[it])
+            }
+            Teks("Jeda sadar muncul sebelum aplikasi yang kamu tandai terbuka. Tekan lama sebuah aplikasi lalu pilih Aktifkan jeda sadar atau Batas harian.")
+            val dipantau = apps.filter { p.bool("pantau:${it.pkg}", false) || p.int("batas:${it.pkg}", 0) > 0 }
+            if (dipantau.isEmpty()) Teks("Belum ada aplikasi yang dipantau.")
+            dipantau.forEach { a ->
+                val batas = p.int("batas:${a.pkg}", 0)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        (peta[a.pkg] ?: a.label) + if (batas > 0) "  (batas $batas m)" else "",
+                        color = t.fg,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { p.taruh("pantau:${a.pkg}", false); p.taruh("batas:${a.pkg}", 0) }) { Text("Lepas") }
+                }
+            }
+            val labelApp = petaApp
+            val teratas = dataWaktu.filterKeys { it in labelApp }.entries.sortedByDescending { it.value }.take(8)
+            if (teratas.isNotEmpty()) {
+                Teks("Hari ini (total " + Waktu.format(dataWaktu.filterKeys { it in labelApp }.values.sum()) + "):")
+                teratas.forEach { e ->
+                    Text(
+                        Waktu.format(e.value).padEnd(7) + (peta[e.key] ?: labelApp[e.key]?.label ?: e.key),
+                        color = t.fg,
+                        fontSize = 13.sp,
+                    )
+                }
+            }
 
             Judul("Notifikasi dan media")
             val notifAktif = Notif.aktif(ctx)
@@ -148,7 +283,7 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
             }
 
             Judul("Kunci layar")
-            Teks("Ketuk dua kali beranda untuk mengunci layar. Perlu mengaktifkan layanan aksesibilitas Hening, yang hanya dipakai untuk mengunci layar. Layanan ini ditampilkan sebagai Hening: kunci layar.")
+            Teks("Aksi Kunci layar perlu mengaktifkan layanan aksesibilitas Hening, yang hanya dipakai untuk mengunci layar. Layanan ini ditampilkan sebagai Hening: kunci layar.")
             Teks("Status: " + if (ServisKunci.instance != null) "aktif" else "nonaktif")
             OutlinedButton(onClick = { Peluncur.aksesibilitas(ctx) }) { Text("Buka pengaturan aksesibilitas") }
 
@@ -166,6 +301,13 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
                 }
             }
 
+            Judul("Cadangan")
+            Teks("Menyimpan seluruh pengaturan (tema, favorit, Ruang, gestur, jeda sadar) ke satu berkas. Foto wallpaper dan font kustom tidak ikut.")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { simpanCadangan.launch("hening-cadangan.json") }) { Text("Buat cadangan") }
+                OutlinedButton(onClick = { bukaCadangan.launch(arrayOf("*/*")) }) { Text("Pulihkan") }
+            }
+
             Judul("Lainnya")
             OutlinedButton(onClick = { Peluncur.pengaturanHome(ctx) }) { Text("Jadikan Hening launcher default") }
             Teks("Hening versi $versi")
@@ -173,6 +315,9 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
         }
     }
 
+    dialogSlot?.let { i ->
+        DialogAksi(Gestur.slot[i], Gestur.namaSlot[i], p, apps) { dialogSlot = null }
+    }
     if (pilihKiri) {
         DialogApp(apps, "Pintasan kiri", { a -> p.taruh("pintasan_kiri", a?.pkg ?: ""); pilihKiri = false }) { pilihKiri = false }
     }
@@ -227,12 +372,63 @@ private fun BarisApp(label: String, nilai: String, aksi: () -> Unit) {
         Modifier.fillMaxWidth().clickable { aksi() }.padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, color = MaterialTheme.colorScheme.primary, fontSize = 15.sp)
+        Text(label, color = MaterialTheme.colorScheme.primary, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Text(nilai, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f), fontSize = 15.sp)
     }
 }
 
-/** Dialog pilih aplikasi dengan pencarian. Tombol Bawaan mengembalikan ke pilihan awal. */
+/** Satu warna tema kustom, diedit sebagai kode hex #RRGGBB. */
+@Composable
+private fun EditorWarna(label: String, kunci: String, p: Pengaturan) {
+    val aktif = hexDari(p.warnaKustom(kunci))
+    var teks by remember(aktif) { mutableStateOf(aktif) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(p.warnaKustom(kunci)))
+        OutlinedTextField(
+            value = teks,
+            onValueChange = {
+                teks = it.take(7)
+                if (Regex("^#[0-9A-Fa-f]{6}\$").matches(teks)) p.taruh("tk_$kunci", teks.uppercase())
+            },
+            label = { Text(label) },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** Dialog memilih aksi untuk satu gestur. */
+@Composable
+private fun DialogAksi(slot: String, nama: String, p: Pengaturan, apps: List<App>, tutup: () -> Unit) {
+    var pilihApp by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = tutup,
+        title = { Text(nama) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Gestur.aksi.forEachIndexed { i, n ->
+                    val aktif = Gestur.kode(p, slot) == i
+                    Text(
+                        (if (aktif) "● " else "○ ") + n,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                p.taruh("gest_$slot", i)
+                                if (i == 7) pilihApp = true else tutup()
+                            }
+                            .padding(vertical = 10.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = tutup) { Text("Tutup") } },
+    )
+    if (pilihApp) {
+        DialogApp(apps, nama, { a -> p.taruh("gest_${slot}_app", a?.pkg ?: ""); pilihApp = false; tutup() }) { pilihApp = false }
+    }
+}
+
+/** Dialog pilih aplikasi dengan pencarian. Tombol Bawaan mengosongkan pilihan. */
 @Composable
 private fun DialogApp(apps: List<App>, judul: String, pilih: (App?) -> Unit, tutup: () -> Unit) {
     var cari by remember { mutableStateOf("") }

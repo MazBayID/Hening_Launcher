@@ -36,7 +36,7 @@ private fun abjadDari(s: String): Char {
  * sebuah aplikasi untuk membukanya.
  */
 @Composable
-fun AlfabetBeranda(apps: List<App>, p: Pengaturan, modifier: Modifier = Modifier) {
+fun AlfabetBeranda(apps: List<App>, p: Pengaturan, modifier: Modifier = Modifier, onGestur: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     val t = p.tema
     val getar = LocalHapticFeedback.current
@@ -57,6 +57,7 @@ fun AlfabetBeranda(apps: List<App>, p: Pengaturan, modifier: Modifier = Modifier
     var jumlahPanel by remember { mutableIntStateOf(0) }
     var panelAtas by remember { mutableFloatStateOf(0f) }
     var menyentuh by remember { mutableStateOf(false) }
+    var ketukTerakhir by remember { mutableLongStateOf(0L) }
     val lengkung by animateFloatAsState(if (menyentuh) 1f else 0f, label = "lengkung")
 
     val itemPx = with(d) { 44.dp.toPx() }
@@ -64,6 +65,7 @@ fun AlfabetBeranda(apps: List<App>, p: Pengaturan, modifier: Modifier = Modifier
     val geserMaks = with(d) { 64.dp.toPx() }
     val radius = with(d) { 96.dp.toPx() }
     val ambangPanel = with(d) { 28.dp.toPx() }
+    val ambangGeser = with(d) { 20.dp.toPx() }
     val maksItem = (tinggi / itemPx).toInt().coerceIn(1, 12)
 
     val isiPanel = if (aktif in huruf.indices) urut.filter { abjadDari(it.second) == huruf[aktif] }.take(maksItem) else emptyList()
@@ -96,15 +98,20 @@ fun AlfabetBeranda(apps: List<App>, p: Pengaturan, modifier: Modifier = Modifier
                     awaitEachGesture {
                         val turun = awaitFirstDown()
                         menyentuh = true
+                        val mulai = System.currentTimeMillis()
+                        val y0 = turun.position.y
+                        var bergeser = false
                         var terakhir = -1
                         var terakhirPilih = -1
                         var dalamPanel = false
 
                         fun proses(pos: Offset) {
                             jariY = pos.y
+                            if (abs(pos.y - y0) > ambangGeser) bergeser = true
                             val n = huruf.size
                             if (n == 0) return
                             if (pos.x < -ambangPanel) dalamPanel = true
+                            if (dalamPanel) bergeser = true
                             if (pos.x >= -ambangPanel * 0.5f) dalamPanel = false
                             if (!dalamPanel) {
                                 val i = ((pos.y / size.height) * n).toInt().coerceIn(0, n - 1)
@@ -145,6 +152,15 @@ fun AlfabetBeranda(apps: List<App>, p: Pengaturan, modifier: Modifier = Modifier
                         pilih = -1
                         jariY = -1f
                         if (dipilih != null) Peluncur.buka(ctx, dipilih.first, p)
+                        val sekarang = System.currentTimeMillis()
+                        if (!bergeser && sekarang - mulai < 300L) {
+                            if (sekarang - ketukTerakhir < 450L) {
+                                ketukTerakhir = 0L
+                                onGestur("abjad")
+                            } else {
+                                ketukTerakhir = sekarang
+                            }
+                        }
                     }
                 },
         ) {

@@ -3,9 +3,16 @@ package com.hening
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.os.Build
 import android.net.Uri
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import org.json.JSONObject
 
 data class App(val label: String, val pkg: String, val komponen: ComponentName, val terpasang: Long)
 
@@ -32,6 +39,11 @@ val daftarTema = listOf(
     Tema("Putih", Color(0xFFF7F7F5), Color(0xFF111111), Color(0xFF1565C0), Color(0xFF2E7D32), Color(0xFF757575), false),
 )
 
+/** Nama semua tema: bawaan, lalu Kustom (indeks 10) dan Material You (indeks 11). */
+fun namaTemaSemua(): List<String> = daftarTema.map { it.nama } + listOf("Kustom", "Material You")
+
+fun hexDari(c: Color): String = "#%06X".format(c.toArgb() and 0xFFFFFF)
+
 /** Membaca daftar aplikasi. Tanpa ikon, jadi ringan dan cepat. */
 object Aplikasi {
     fun muat(ctx: Context): List<App> {
@@ -51,6 +63,7 @@ object Aplikasi {
  * jadi layar otomatis diperbarui saat nilainya berubah.
  */
 class Pengaturan(context: Context) {
+    private val ctxApp = context.applicationContext
     private val sp = context.getSharedPreferences("hening", Context.MODE_PRIVATE)
     private val nilai = mutableStateMapOf<String, Any>().apply {
         sp.all.forEach { (k, v) -> if (v != null) put(k, v) }
@@ -74,7 +87,121 @@ class Pengaturan(context: Context) {
     private fun daftar(k: String): List<String> = str(k).split(",").filter { it.isNotBlank() }
     private fun taruhDaftar(k: String, l: List<String>) = taruh(k, l.joinToString(","))
 
-    val tema: Tema get() = daftarTema[int("tema", 0).coerceIn(0, daftarTema.lastIndex)]
+    val tema: Tema
+        get() {
+            val i = int("tema", 0)
+            return when (i) {
+                10 -> temaKustom()
+                11 -> materialYou()
+                else -> daftarTema[i.coerceIn(0, daftarTema.lastIndex)]
+            }
+        }
+
+    /** Warna tema kustom. Kosong berarti memakai warna tema Terminal. */
+    fun warnaKustom(k: String): Color {
+        val d = daftarTema[0]
+        val bawaan = when (k) {
+            "bg" -> d.bg
+            "fg" -> d.fg
+            "aksen" -> d.aksen
+            "aksen2" -> d.aksen2
+            else -> d.redup
+        }
+        val s = str("tk_$k")
+        return if (s.isBlank()) bawaan else try { Color(android.graphics.Color.parseColor(s)) } catch (e: Exception) { bawaan }
+    }
+
+    fun temaKustom(): Tema {
+        val bg = warnaKustom("bg")
+        return Tema("Kustom", bg, warnaKustom("fg"), warnaKustom("aksen"), warnaKustom("aksen2"), warnaKustom("redup"), bg.luminance() < 0.5f)
+    }
+
+    /** Menyalin warna sebuah tema ke slot Kustom lalu memilihnya. */
+    fun salinKeKustom(t: Tema) {
+        taruh("tk_bg", hexDari(t.bg))
+        taruh("tk_fg", hexDari(t.fg))
+        taruh("tk_aksen", hexDari(t.aksen))
+        taruh("tk_aksen2", hexDari(t.aksen2))
+        taruh("tk_redup", hexDari(t.redup))
+        taruh("tema", 10)
+    }
+
+    private val myGelap by lazy { buatMaterialYou(true) }
+    private val myTerang by lazy { buatMaterialYou(false) }
+
+    private fun buatMaterialYou(gelap: Boolean): Tema {
+        if (Build.VERSION.SDK_INT < 31) return daftarTema[4]
+        val c = if (gelap) dynamicDarkColorScheme(ctxApp) else dynamicLightColorScheme(ctxApp)
+        return Tema("Material You", c.background, c.onBackground, c.primary, c.tertiary, c.outline, gelap)
+    }
+
+    /** Warna dari wallpaper sistem (Android 12 ke atas). Mengikuti mode gelap atau terang sistem. */
+    fun materialYou(): Tema {
+        val gelap = (ctxApp.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        return if (gelap) myGelap else myTerang
+    }
+
+    fun eksporTema(): String {
+        val t = tema
+        return JSONObject()
+            .put("hening_tema", 1)
+            .put("bg", hexDari(t.bg))
+            .put("fg", hexDari(t.fg))
+            .put("aksen", hexDari(t.aksen))
+            .put("aksen2", hexDari(t.aksen2))
+            .put("redup", hexDari(t.redup))
+            .toString(2)
+    }
+
+    fun imporTema(teks: String): Boolean {
+        return try {
+            val o = JSONObject(teks)
+            val kunci = listOf("bg", "fg", "aksen", "aksen2", "redup")
+            val nilaiBaru = kunci.map { k ->
+                val h = o.getString(k)
+                android.graphics.Color.parseColor(h)
+                k to h.uppercase()
+            }
+            nilaiBaru.forEach { (k, h) -> taruh("tk_$k", h) }
+            taruh("tema", 10)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Seluruh pengaturan sebagai JSON untuk cadangan. Foto wallpaper dan font kustom tidak ikut. */
+    fun eksporSemua(): String {
+        val data = JSONObject()
+        nilai.forEach { (k, v) ->
+            val e = JSONObject()
+            when (v) {
+                is Int -> e.put("t", "i").put("v", v)
+                is Boolean -> e.put("t", "b").put("v", v)
+                is String -> e.put("t", "s").put("v", v)
+                else -> null
+            }?.let { data.put(k, it) }
+        }
+        return JSONObject().put("hening", 1).put("data", data).toString(2)
+    }
+
+    fun imporSemua(teks: String): Boolean {
+        return try {
+            val data = JSONObject(teks).getJSONObject("data")
+            val kunci = data.keys().asSequence().toList()
+            kunci.forEach { k ->
+                val e = data.getJSONObject(k)
+                when (e.getString("t")) {
+                    "i" -> taruh(k, e.getInt("v"))
+                    "b" -> taruh(k, e.getBoolean("v"))
+                    "s" -> taruh(k, e.getString("v"))
+                }
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
     val gaya: Int get() = int("gaya", 0)
     val mono: Boolean get() = bool("mono", true)
     val ruang: Int get() = int("ruang", 0)
