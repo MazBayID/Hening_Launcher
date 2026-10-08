@@ -6,6 +6,7 @@ import android.app.usage.UsageStatsManager
 import android.os.Build
 import android.os.Process
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
