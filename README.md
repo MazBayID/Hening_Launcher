@@ -2,7 +2,7 @@
 # Hening
 
 <p align="center">
-  <img src="screen-gif.gif" alt="Demo GIF" width="100" />
+  <img src="screen-gif.gif" alt="Gambar GIF" width="100" />
   <img src="Screen-2.png" alt="Gambar 1" width="100" />
   <img src="Screen-1.png" alt="Gambar 2" width="100" />
 </p>
