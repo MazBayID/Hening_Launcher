@@ -156,6 +156,13 @@ fun LayarPengaturan(apps: List<App>, p: Pengaturan, tutup: () -> Unit) {
             Sakelar("Format 24 jam", p.jam24) { p.taruh("jam24", it) }
             Sakelar("Sembunyikan status bar", p.bool("hidestatus", false)) { p.taruh("hidestatus", it) }
 
+            Judul("Beranda dan animasi")
+            Sakelar("Smart Bar kontekstual (jam, agenda, media bergantian otomatis)", p.bool("smartbar", true)) { p.taruh("smartbar", it) }
+            Teks("Media yang sedang diputar tampil lebih dulu, lalu acara dalam 90 menit ke depan, selain itu jam. Ketuk bar untuk berpindah manual.")
+            Pilihan("Pratinjau notifikasi di bawah favorit", listOf("Mati", "1 baris", "2 baris", "3 baris"), p.int("notifbaris", 2)) { p.taruh("notifbaris", it) }
+            Sakelar("Animasi pegas saat membuka aplikasi", p.bool("animasi", true)) { p.taruh("animasi", it) }
+            Teks("Geser kanan pada sebuah favorit untuk membuka popup: pintasan aplikasi, widget, dan grup.")
+
             Judul("Editor tema")
             Teks("Salin warna dari tema yang ada, lalu ubah sesukamu. Tema Kustom otomatis terpilih.")
             Pilihan("Salin warna dari", daftarTema.map { it.nama }, -1) { p.salinKeKustom(daftarTema[it]) }

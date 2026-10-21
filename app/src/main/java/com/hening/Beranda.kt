@@ -4,8 +4,11 @@ package com.hening
 
 import android.widget.Toast
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -14,6 +17,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,12 +27,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,21 +45,32 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
-import androidx.compose.animation.core.*
-
 
 private val TANGGAL = DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("id", "ID"))
 
+/** "baru", "5m", "2j", "3h": umur notifikasi. */
+private fun umurNotif(waktu: Long): String {
+    val menit = ((System.currentTimeMillis() - waktu) / 60_000L).coerceAtLeast(0L)
+    return when {
+        menit < 1 -> "baru"
+        menit < 60 -> "${menit}m"
+        menit < 1440 -> "${menit / 60}j"
+        else -> "${menit / 1440}h"
+    }
+}
+
 /**
- * Beranda: jam, favorit sebagai teks, ringkasan notifikasi di bawah favorit, widget media, dan agenda.
- * Geser atas = daftar aplikasi, bawah = notifikasi, kiri/kanan = pintasan,
- * ketuk dua kali = kunci layar, tekan lama = pengaturan. Geser kanan pada favorit = grup.
+ * Beranda: Smart Bar kontekstual (jam, agenda, atau media), favorit sebagai teks dengan pratinjau notifikasi,
+ * dan abjad bergelombang di sisi kanan. Daftar favorit bergerak dengan pegas.
+ * Geser kanan pada favorit membuka popup pintasan, widget, dan grup.
  */
 @Composable
 fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: () -> Unit) {
     val ctx = LocalContext.current
     val t = p.tema
     val terminal = p.gaya == 0
+    val smart = p.bool("smartbar", true)
+    val barisNotif = p.int("notifbaris", 2)
     val peta = remember(p.str("nama")) { p.petaNama() }
     val petaApp = remember(apps) { apps.associateBy { it.pkg } }
     val favorit = p.favoritUrut().mapNotNull { petaApp[it] }.take(p.jumlahFav)
@@ -64,7 +82,7 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
     val labelKiri = petaApp[pkgKiri]?.let { peta[it.pkg] ?: it.label } ?: "telepon"
     val labelKanan = petaApp[pkgKanan]?.let { peta[it.pkg] ?: it.label } ?: "kamera"
     var menuPkg by remember { mutableStateOf<String?>(null) }
-    var grupPkg by remember { mutableStateOf<String?>(null) }
+    var popupPkg by remember { mutableStateOf<String?>(null) }
 
     val aksesNotif = Notif.aktif(ctx)
     val media by produceState<InfoMedia?>(null, aksesNotif) {
@@ -74,7 +92,7 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
         }
     }
     val agendaAktif = p.bool("agenda", false)
-    val agenda by produceState<String?>(null, agendaAktif) {
+    val acara by produceState<Acara?>(null, agendaAktif) {
         while (true) {
             value = if (agendaAktif) withContext(Dispatchers.IO) { Agenda.berikut(ctx) } else null
             delay(60_000)
@@ -108,166 +126,187 @@ fun Beranda(apps: List<App>, p: Pengaturan, onLaci: () -> Unit, onPengaturan: ()
     )
 
     Box(Modifier.fillMaxSize()) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .pointerInput(apps) {
-                detectTapGestures(
-                    onDoubleTap = { Gestur.jalankan("dobel", ctx, p, apps, onLaci, onPengaturan) },
-                    onLongPress = { Gestur.jalankan("tekan", ctx, p, apps, onLaci, onPengaturan) },
-                )
-            }
-            .pointerInput(apps) {
-                var total = Offset.Zero
-                detectDragGestures(
-                    onDragStart = { total = Offset.Zero },
-                    onDragEnd = {
-                        val mendatar = abs(total.x) > abs(total.y) * 1.5f
-                        when {
-                            !mendatar && total.y < -size.height * 0.10f -> Gestur.jalankan("atas", ctx, p, apps, onLaci, onPengaturan)
-                            !mendatar && total.y > size.height * 0.10f -> Gestur.jalankan("bawah", ctx, p, apps, onLaci, onPengaturan)
-                            mendatar && total.x < -size.width * 0.25f -> Gestur.jalankan("kiri", ctx, p, apps, onLaci, onPengaturan)
-                            mendatar && total.x > size.width * 0.25f -> Gestur.jalankan("kanan", ctx, p, apps, onLaci, onPengaturan)
-                        }
-                    },
-                ) { _, d -> total += d }
-            }
-            .padding(start = 24.dp, end = if (p.bool("alfabetberanda", true)) 44.dp else 24.dp, top = 20.dp, bottom = 20.dp),
-        horizontalAlignment = rata,
-    ) {
-        if (terminal) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(color = t.aksen)) { append("hening") }
-                        withStyle(SpanStyle(color = t.redup)) { append("@") }
-                        withStyle(SpanStyle(color = t.aksen2)) { append(p.namaRuang(p.ruang).lowercase()) }
-                        withStyle(SpanStyle(color = t.redup)) { append(":~\$ ") }
-                        withStyle(SpanStyle(color = t.fg)) { append("date") }
-                    },
-                    fontSize = 13.sp,
-                )
-                Text("█", color = t.aksen, fontSize = 13.sp, modifier = Modifier.graphicsLayer { alpha = kursor.value })
-            }
-        }
-        if (p.tampilJam) JamBeranda(sekarang, p, t, terminal, rata)
-        if (p.tampilTanggal) {
-            Text(
-                (if (terminal) "// " else "") + sekarang.format(TANGGAL),
-                color = if (terminal) t.redup else t.fg.copy(alpha = 0.7f),
-                fontSize = 14.sp,
-            )
-        }
-        val layar = waktuLayar
-        if (layar > 0L) {
-            Text("◷ layar hari ini: " + Waktu.format(layar), color = t.redup, fontSize = 12.sp)
-        }
-        val ag = agenda
-        if (ag != null) {
-            Text("› $ag", color = t.aksen2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        if (terminal && favorit.isNotEmpty()) {
-            Text("\$ ls favorit/", color = t.redup, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = rata) {
-            favorit.forEachIndexed { i, a ->
-                key(a.pkg) {
-                    BarisFavorit(
-                        a, i + 1, p, apps, petaApp, peta, t, terminal, ukuran, rata, teksRata,
-                        Notif.data[a.pkg],
-                        menuTampil = menuPkg == a.pkg,
-                        grupTampil = grupPkg == a.pkg,
-                        onMenu = { menuPkg = if (it) a.pkg else null },
-                        onGrup = { grupPkg = if (it) a.pkg else null },
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .pointerInput(apps) {
+                    detectTapGestures(
+                        onDoubleTap = { Gestur.jalankan("dobel", ctx, p, apps, onLaci, onPengaturan) },
+                        onLongPress = { Gestur.jalankan("tekan", ctx, p, apps, onLaci, onPengaturan) },
                     )
                 }
-            }
-            if (favorit.isEmpty() && apps.isNotEmpty()) {
-                Text(
-                    "Geser ke atas untuk membuka daftar aplikasi.\nTekan lama sebuah aplikasi untuk menjadikannya favorit.",
-                    color = t.redup,
-                    fontSize = 14.sp,
-                    textAlign = teksRata,
-                )
-            }
-        }
-
-        val m = media
-        if (m != null) {
-            Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "♪ " + m.judul + (if (m.artis.isNotBlank()) " — " + m.artis else ""),
-                    color = t.aksen2,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text("⏮", color = t.fg, modifier = Modifier.clickable { m.kontrol.transportControls.skipToPrevious() }.padding(8.dp))
-                Text(
-                    if (m.main) "⏸" else "▶",
-                    color = t.fg,
-                    modifier = Modifier.clickable {
-                        if (m.main) m.kontrol.transportControls.pause() else m.kontrol.transportControls.play()
-                    }.padding(8.dp),
-                )
-                Text("⏭", color = t.fg, modifier = Modifier.clickable { m.kontrol.transportControls.skipToNext() }.padding(8.dp))
-            }
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (terminal) "[$labelKiri]" else labelKiri,
-                color = if (terminal) t.aksen2 else t.fg.copy(alpha = 0.8f),
-                fontSize = 14.sp,
-                maxLines = 1,
-                modifier = Modifier.clickable { Peluncur.pintasan(ctx, apps, pkgKiri, true, p) }.padding(vertical = 8.dp),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                listOf(0, 1).forEach { r ->
-                    val nama = p.namaRuang(r).lowercase()
+                .pointerInput(apps) {
+                    var total = Offset.Zero
+                    detectDragGestures(
+                        onDragStart = { total = Offset.Zero },
+                        onDragEnd = {
+                            val mendatar = abs(total.x) > abs(total.y) * 1.5f
+                            when {
+                                !mendatar && total.y < -size.height * 0.10f -> Gestur.jalankan("atas", ctx, p, apps, onLaci, onPengaturan)
+                                !mendatar && total.y > size.height * 0.10f -> Gestur.jalankan("bawah", ctx, p, apps, onLaci, onPengaturan)
+                                mendatar && total.x < -size.width * 0.25f -> Gestur.jalankan("kiri", ctx, p, apps, onLaci, onPengaturan)
+                                mendatar && total.x > size.width * 0.25f -> Gestur.jalankan("kanan", ctx, p, apps, onLaci, onPengaturan)
+                            }
+                        },
+                    ) { _, d -> total += d }
+                }
+                .padding(start = 24.dp, end = if (p.bool("alfabetberanda", true)) 44.dp else 24.dp, top = 20.dp, bottom = 20.dp),
+            horizontalAlignment = rata,
+        ) {
+            if (terminal) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (terminal) "~/$nama" else nama,
-                        color = if (r == p.ruang) (if (terminal) t.aksen else t.fg) else t.redup,
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(color = t.aksen)) { append("hening") }
+                            withStyle(SpanStyle(color = t.redup)) { append("@") }
+                            withStyle(SpanStyle(color = t.aksen2)) { append(p.namaRuang(p.ruang).lowercase()) }
+                            withStyle(SpanStyle(color = t.redup)) { append(":~\$ ") }
+                            withStyle(SpanStyle(color = t.fg)) { append("date") }
+                        },
                         fontSize = 13.sp,
-                        fontWeight = if (r == p.ruang) FontWeight.Medium else FontWeight.Normal,
-                        modifier = Modifier.clickable { p.taruh("ruang", r) }.padding(horizontal = 8.dp, vertical = 8.dp),
+                    )
+                    Text("█", color = t.aksen, fontSize = 13.sp, modifier = Modifier.graphicsLayer { alpha = kursor.value })
+                }
+            }
+            if (smart) {
+                SmartBar(sekarang, p, t, terminal, rata, teksRata, acara, media)
+            } else {
+                if (p.tampilJam) JamBeranda(sekarang, p, t, terminal, rata)
+                if (p.tampilTanggal) {
+                    Text(
+                        (if (terminal) "// " else "") + sekarang.format(TANGGAL),
+                        color = if (terminal) t.redup else t.fg.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
                     )
                 }
             }
-            Text(
-                if (terminal) "[$labelKanan]" else labelKanan,
-                color = if (terminal) t.aksen2 else t.fg.copy(alpha = 0.8f),
-                fontSize = 14.sp,
-                maxLines = 1,
-                modifier = Modifier.clickable { Peluncur.pintasan(ctx, apps, pkgKanan, false, p) }.padding(vertical = 8.dp),
+            val layar = waktuLayar
+            if (layar > 0L) {
+                Text("◷ layar hari ini: " + Waktu.format(layar), color = t.redup, fontSize = 12.sp)
+            }
+            val ac = acara
+            if (!smart && ac != null) {
+                Text("› " + Agenda.teks(ac), color = t.aksen2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            if (terminal && favorit.isNotEmpty()) {
+                Text("\$ ls favorit/", color = t.redup, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
+            }
+            LazyColumn(
+                Modifier.fillMaxWidth(),
+                userScrollEnabled = false,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = rata,
+            ) {
+                itemsIndexed(favorit, key = { _, a -> a.pkg }) { i, a ->
+                    Box(
+                        Modifier.fillMaxWidth().animateItem(
+                            fadeInSpec = spring<Float>(stiffness = Spring.StiffnessMediumLow),
+                            placementSpec = spring<IntOffset>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+                            fadeOutSpec = spring<Float>(stiffness = Spring.StiffnessMedium),
+                        ),
+                    ) {
+                        BarisFavorit(
+                            a, i + 1, p, apps, peta, t, terminal, ukuran, rata, teksRata,
+                            Notif.data[a.pkg], barisNotif,
+                            menuTampil = menuPkg == a.pkg,
+                            onMenu = { menuPkg = if (it) a.pkg else null },
+                            onPopup = { popupPkg = a.pkg },
+                        )
+                    }
+                }
+                if (favorit.isEmpty() && apps.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Geser ke atas untuk membuka daftar aplikasi.\nTekan lama sebuah aplikasi untuk menjadikannya favorit.",
+                            color = t.redup,
+                            fontSize = 14.sp,
+                            textAlign = teksRata,
+                        )
+                    }
+                }
+            }
+
+            val m = media
+            if (!smart && m != null) {
+                Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "♪ " + m.judul + (if (m.artis.isNotBlank()) " — " + m.artis else ""),
+                        color = t.aksen2,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text("⏮", color = t.fg, modifier = Modifier.clickable { m.kontrol.transportControls.skipToPrevious() }.padding(8.dp))
+                    Text(
+                        if (m.main) "⏸" else "▶",
+                        color = t.fg,
+                        modifier = Modifier.clickable {
+                            if (m.main) m.kontrol.transportControls.pause() else m.kontrol.transportControls.play()
+                        }.padding(8.dp),
+                    )
+                    Text("⏭", color = t.fg, modifier = Modifier.clickable { m.kontrol.transportControls.skipToNext() }.padding(8.dp))
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (terminal) "[$labelKiri]" else labelKiri,
+                    color = if (terminal) t.aksen2 else t.fg.copy(alpha = 0.8f),
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    modifier = Modifier.clickable { Peluncur.pintasan(ctx, apps, pkgKiri, true, p) }.padding(vertical = 8.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    listOf(0, 1).forEach { r ->
+                        val nama = p.namaRuang(r).lowercase()
+                        Text(
+                            if (terminal) "~/$nama" else nama,
+                            color = if (r == p.ruang) (if (terminal) t.aksen else t.fg) else t.redup,
+                            fontSize = 13.sp,
+                            fontWeight = if (r == p.ruang) FontWeight.Medium else FontWeight.Normal,
+                            modifier = Modifier.clickable { p.taruh("ruang", r) }.padding(horizontal = 8.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+                Text(
+                    if (terminal) "[$labelKanan]" else labelKanan,
+                    color = if (terminal) t.aksen2 else t.fg.copy(alpha = 0.8f),
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    modifier = Modifier.clickable { Peluncur.pintasan(ctx, apps, pkgKanan, false, p) }.padding(vertical = 8.dp),
+                )
+            }
+        }
+        if (p.bool("alfabetberanda", true)) {
+            AlfabetBeranda(
+                apps, p,
+                Modifier.align(Alignment.CenterEnd).statusBarsPadding().navigationBarsPadding(),
+                onGestur = { Gestur.jalankan(it, ctx, p, apps, onLaci, onPengaturan) },
             )
         }
     }
-    if (p.bool("alfabetberanda", true)) {
-        AlfabetBeranda(
-            apps, p,
-            Modifier.align(Alignment.CenterEnd).statusBarsPadding().navigationBarsPadding(),
-            onGestur = { Gestur.jalankan(it, ctx, p, apps, onLaci, onPengaturan) },
-        )
-    }
+
+    popupPkg?.let { pkg ->
+        val app = petaApp[pkg]
+        if (app != null) PopupFavorit(app, p, apps) { popupPkg = null } else popupPkg = null
     }
 }
 
+/** Satu favorit: nomor, nama, lencana jumlah, lalu pratinjau notifikasi terbaru di bawahnya. */
 @Composable
 private fun BarisFavorit(
     a: App,
     nomor: Int,
     p: Pengaturan,
     apps: List<App>,
-    petaApp: Map<String, App>,
     peta: Map<String, String>,
     t: Tema,
     terminal: Boolean,
@@ -275,13 +314,14 @@ private fun BarisFavorit(
     rata: Alignment.Horizontal,
     teksRata: TextAlign,
     ringkas: Ringkas?,
+    barisNotif: Int,
     menuTampil: Boolean,
-    grupTampil: Boolean,
     onMenu: (Boolean) -> Unit,
-    onGrup: (Boolean) -> Unit,
+    onPopup: () -> Unit,
 ) {
     val ctx = LocalContext.current
-    Column(horizontalAlignment = rata) {
+    val view = LocalView.current
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = rata) {
         Box {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (terminal) {
@@ -297,7 +337,12 @@ private fun BarisFavorit(
                             var dx = 0f
                             detectHorizontalDragGestures(
                                 onDragStart = { dx = 0f },
-                                onDragEnd = { if (dx > 60f) onGrup(true) },
+                                onDragEnd = {
+                                    if (dx > 60f) {
+                                        Getar.konfirmasi(view)
+                                        onPopup()
+                                    }
+                                },
                             ) { _, d -> dx += d }
                         }
                         .combinedClickable(
@@ -310,39 +355,45 @@ private fun BarisFavorit(
                 }
             }
             MenuApp(a, p, apps, menuTampil) { onMenu(false) }
-            DropdownMenu(expanded = grupTampil, onDismissRequest = { onGrup(false) }) {
-                val anggota = p.grup(a.pkg).mapNotNull { petaApp[it] }
-                if (anggota.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("Grup kosong. Tekan lama aplikasi lain, pilih Masukkan ke grup.", fontSize = 12.sp) },
-                        onClick = { onGrup(false) },
-                    )
-                }
-                anggota.forEach { g ->
-                    DropdownMenuItem(
-                        text = { Text(peta[g.pkg] ?: g.label) },
-                        onClick = { onGrup(false); Peluncur.buka(ctx, g, p) },
-                        trailingIcon = { Text("✕", modifier = Modifier.clickable { p.toggleGrup(a.pkg, g.pkg) }.padding(8.dp)) },
-                    )
-                }
+        }
+        if (ringkas != null && barisNotif > 0) {
+            ringkas.item.take(barisNotif).forEach { n ->
+                PratinjauNotif(n, t, terminal, { Peluncur.buka(ctx, a, p) }, { PendengarNotifikasi.hapusKunci(n.kunci) })
+            }
+            val sisa = ringkas.jumlah - minOf(barisNotif, ringkas.item.size)
+            if (sisa > 0) {
+                Text(
+                    "+$sisa lagi",
+                    color = t.redup,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(start = if (terminal) 22.dp else 0.dp),
+                )
             }
         }
-        if (ringkas != null && ringkas.teks.isNotBlank()) {
-            Text(
-                ringkas.teks,
-                color = t.redup,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = teksRata,
-                modifier = Modifier
-                    .padding(start = if (terminal) 22.dp else 0.dp)
-                    .combinedClickable(
-                        onClick = { Peluncur.buka(ctx, a, p) },
-                        onLongClick = { PendengarNotifikasi.hapus(a.pkg) },
-                    ),
-            )
-        }
+    }
+}
+
+/** Satu baris pratinjau: pengirim (tebal) dan isi, ditambah umur notifikasi. Tekan lama untuk menghapusnya. */
+@Composable
+private fun PratinjauNotif(n: ItemNotif, t: Tema, terminal: Boolean, onBuka: () -> Unit, onHapus: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = if (terminal) 22.dp else 0.dp, top = 2.dp)
+            .combinedClickable(onClick = onBuka, onLongClick = onHapus),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = t.aksen2, fontWeight = FontWeight.Medium)) { append(n.judul) }
+                if (n.isi.isNotBlank()) withStyle(SpanStyle(color = t.redup)) { append("  " + n.isi) }
+            },
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Text("  " + umurNotif(n.waktu), color = t.redup, fontSize = 10.sp)
     }
 }
 

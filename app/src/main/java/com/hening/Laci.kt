@@ -26,6 +26,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -132,12 +133,12 @@ fun Laci(apps: List<App>, p: Pengaturan, bukaPengaturan: () -> Unit, tutup: () -
                         "❯ " + a.teks,
                         color = t.aksen2,
                         fontSize = 15.sp,
-                        modifier = Modifier.fillMaxWidth().clickable { a.jalankan() }.padding(horizontal = 24.dp, vertical = 10.dp),
+                        modifier = Modifier.animateItem(placementSpec = PegasItem).fillMaxWidth().clickable { a.jalankan() }.padding(horizontal = 24.dp, vertical = 10.dp),
                     )
                 }
                 items(tampil, key = { if (it is Baris) it.app.pkg else "h$it" }) { x ->
                     if (x is Baris) {
-                        Box {
+                        Box(Modifier.animateItem(placementSpec = PegasItem)) {
                             Text(
                                 x.nama,
                                 color = t.fg,
@@ -158,7 +159,7 @@ fun Laci(apps: List<App>, p: Pengaturan, bukaPengaturan: () -> Unit, tutup: () -
                             if (terminal) "# $x" else "$x",
                             color = if (terminal) t.redup else t.aksen,
                             fontSize = 13.sp,
-                            modifier = Modifier.padding(start = 24.dp, top = 14.dp, bottom = 2.dp),
+                            modifier = Modifier.animateItem(placementSpec = PegasItem).padding(start = 24.dp, top = 14.dp, bottom = 2.dp),
                         )
                     }
                 }
@@ -200,7 +201,7 @@ private fun PenggeserAlfabet(
     onPilih: (Char) -> Unit,
     modifier: Modifier,
 ) {
-    val getar = LocalHapticFeedback.current
+    val view = LocalView.current
     Column(
         modifier
             .fillMaxHeight()
@@ -213,7 +214,7 @@ private fun PenggeserAlfabet(
                         val ch = huruf[i]
                         if (ch != terakhir) {
                             terakhir = ch
-                            if (haptik) getar.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (haptik) Getar.tick(view)
                             onAktif(ch)
                             onPilih(ch)
                         }

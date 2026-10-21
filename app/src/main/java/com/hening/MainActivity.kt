@@ -11,6 +11,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,6 +75,25 @@ fun Root(p: Pengaturan, versi: Int, sinyalHome: Int) {
         p.isiAwal(apps.map { it.pkg }.toSet())
     }
     LaunchedEffect(sinyalHome) { laci = false; pengaturan = false; Jeda.app = null }
+    // Beranda mengecil saat aplikasi dibuka dan kembali dengan pegas saat resume.
+    LaunchedEffect(versi, sinyalHome) { Transisi.membuka = false }
+    LaunchedEffect(Transisi.membuka) {
+        if (Transisi.membuka) {
+            delay(2500)
+            Transisi.membuka = false
+        }
+    }
+    val luncur = Transisi.membuka && p.bool("animasi", true)
+    val skalaLuncur by animateFloatAsState(
+        if (luncur) 0.92f else 1f,
+        spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "luncur",
+    )
+    val alfaLuncur by animateFloatAsState(
+        if (luncur) 0.4f else 1f,
+        spring(stiffness = Spring.StiffnessMedium),
+        label = "luncurAlfa",
+    )
     val modeFont = p.int("font", if (p.bool("mono", true)) 0 else 1)
     LaunchedEffect(p.int("font_versi", 0), modeFont) {
         FontKustom.family = if (modeFont == 2) withContext(Dispatchers.IO) { FontKustom.muat(ctx) } else null
@@ -124,13 +151,36 @@ fun Root(p: Pengaturan, versi: Int, sinyalHome: Int) {
         CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = fam)) {
             Box(Modifier.fillMaxSize().background(tema.bg)) {
                 LatarBelakang(p, tema)
-                Beranda(apps, p, onLaci = { laci = true }, onPengaturan = { pengaturan = true })
+                Box(
+                    Modifier.fillMaxSize().graphicsLayer {
+                        scaleX = skalaLuncur
+                        scaleY = skalaLuncur
+                        alpha = alfaLuncur
+                    }
+                ) {
+                    Beranda(apps, p, onLaci = { laci = true }, onPengaturan = { pengaturan = true })
+                }
                 AnimatedVisibility(
                     visible = laci,
-                    enter = slideInVertically { it },
-                    exit = slideOutVertically { it },
-                ) { Laci(apps, p, { pengaturan = true }) { laci = false } }
-                if (pengaturan) LayarPengaturan(apps, p) { pengaturan = false }
+                    enter = slideInVertically(spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)) { it },
+                    exit = slideOutVertically(spring(stiffness = Spring.StiffnessMedium)) { it },
+                ) {
+                    Box(
+                        Modifier.fillMaxSize().graphicsLayer {
+                            scaleX = skalaLuncur
+                            scaleY = skalaLuncur
+                            alpha = alfaLuncur
+                        }
+                    ) { Laci(apps, p, { pengaturan = true }) { laci = false } }
+                }
+                AnimatedVisibility(
+                    visible = pengaturan,
+                    enter = fadeIn(spring()) + scaleIn(
+                        spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+                        initialScale = 0.92f,
+                    ),
+                    exit = fadeOut(spring()) + scaleOut(targetScale = 0.95f),
+                ) { LayarPengaturan(apps, p) { pengaturan = false } }
                 Jeda.app?.let { LayarJeda(it, p) }
             }
         }

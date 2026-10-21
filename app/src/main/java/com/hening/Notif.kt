@@ -14,7 +14,10 @@ import android.view.accessibility.AccessibilityEvent
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.core.app.NotificationManagerCompat
 
-data class Ringkas(val jumlah: Int, val teks: String)
+data class ItemNotif(val kunci: String, val judul: String, val isi: String, val waktu: Long)
+
+/** Notifikasi satu aplikasi: jumlah total dan sampai 3 yang terbaru. */
+data class Ringkas(val jumlah: Int, val item: List<ItemNotif>)
 
 object Notif {
     /** Ringkasan notifikasi per paket, dibaca langsung oleh layar. */
@@ -51,13 +54,16 @@ class PendengarNotifikasi : NotificationListenerService() {
                 }
                 .groupBy { it.packageName }
                 .forEach { (pkg, l) ->
-                    val terbaru = l.maxByOrNull { it.postTime }
-                    if (terbaru != null) {
-                        val e = terbaru.notification.extras
-                        val judul = e.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-                        val isi = e.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
-                        baru[pkg] = Ringkas(l.size, listOf(judul, isi).filter { it.isNotBlank() }.joinToString(": "))
+                    val item = l.sortedByDescending { it.postTime }.take(3).map { n ->
+                        val e = n.notification.extras
+                        ItemNotif(
+                            n.key,
+                            e.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(),
+                            e.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty(),
+                            n.postTime,
+                        )
                     }
+                    baru[pkg] = Ringkas(l.size, item)
                 }
         } catch (e: Exception) {
         }
@@ -67,6 +73,15 @@ class PendengarNotifikasi : NotificationListenerService() {
 
     companion object {
         var instance: PendengarNotifikasi? = null
+
+        /** Menghapus satu notifikasi berdasarkan kuncinya. */
+        fun hapusKunci(kunci: String) {
+            val s = instance ?: return
+            try {
+                s.cancelNotification(kunci)
+            } catch (e: Exception) {
+            }
+        }
 
         /** Menghapus semua notifikasi yang bisa dihapus dari satu aplikasi. */
         fun hapus(pkg: String) {

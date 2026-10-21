@@ -11,7 +11,7 @@
 Launcher Android minimalis dengan tema terminal untuk programmer. Ide fitur terinspirasi Niagara Launcher dan Olauncher,
 ditulis sendiri dari nol dengan Kotlin dan Jetpack Compose. Tanpa ikon di beranda, tanpa iklan, tanpa internet.
 
-## Fitur versi 0.4
+## Fitur versi 0.5
 
 **Tampilan dan tema**
 - Gaya **Terminal** (prompt `hening@santai:~$ date` dengan kursor berkedip, nomor favorit, komentar `// tanggal`, Ruang sebagai `~/santai`) atau gaya **Minimal**.
@@ -22,10 +22,12 @@ ditulis sendiri dari nol dengan Kotlin dan Jetpack Compose. Tanpa ikon di berand
 - **Wallpaper**: polos, 6 gradien, atau foto dari galeri, dengan pengatur peredup.
 
 **Beranda**
+- **Smart Bar kontekstual**: bagian atas beranda berganti otomatis antara jam, agenda (acara dalam 90 menit ke depan), dan pemutar media (saat ada lagu diputar). Ketuk bar untuk berpindah manual.
 - Favorit sebagai teks, urut manual atau otomatis menurut pemakaian, dengan **Ruang** Santai dan Kerja (bisa ganti otomatis).
-- **Ringkasan notifikasi** di bawah tiap favorit, **widget media**, dan **agenda** kalender berikutnya (izin opsional).
-- **Grup di balik favorit**: geser kanan pada favorit untuk membuka aplikasi yang digrup.
-- **Abjad melengkung** di sisi kanan: sentuh untuk melihat aplikasi berawalan huruf itu, geser ke kiri lalu lepas untuk membuka.
+- **Pratinjau notifikasi** di bawah nama aplikasi favorit: sampai 3 baris berisi pengirim, isi, dan umur notifikasi. Tekan lama sebuah pratinjau untuk menghapusnya.
+- **Popup favorit**: geser kanan pada sebuah favorit untuk membuka pintasan aplikasi (App Shortcuts), widget aplikasi itu, dan grup aplikasi di baliknya.
+- **Abjad bergelombang** di sisi kanan: huruf di bawah jari menggelombang ke tengah dengan pegas, disertai getaran halus tiap pindah huruf. Daftar aplikasi berawalan huruf itu muncul di kiri; geser ke sana lalu lepas untuk membuka.
+- **Animasi pegas**: daftar favorit dan daftar aplikasi bergerak dengan pegas, laci aplikasi meluncur dengan pegas, dan beranda mengecil lalu kembali saat aplikasi dibuka.
 - **Waktu layar hari ini** (opsional, perlu Usage access).
 
 **Gestur yang bisa diatur**
@@ -43,7 +45,7 @@ Aplikasi yang kamu tandai menampilkan layar "napas dulu" beberapa detik sebelum 
 
 ## Izin opsional
 Semua izin di bawah ini bisa dimatikan dan aplikasi tetap berfungsi:
-- **Akses notifikasi**: ringkasan notifikasi dan widget media.
+- **Akses notifikasi**: pratinjau notifikasi dan pemutar media.
 - **Aksesibilitas**: hanya untuk mengunci layar.
 - **Kalender**: agenda berikutnya.
 - **Usage access**: waktu layar dan jeda sadar.
@@ -58,7 +60,7 @@ Di Android 13 ke atas, aplikasi di luar Play Store perlu **Izinkan setelan terba
 4. Tekan lama beranda untuk membuka pengaturan.
 
 ## Rencana
-- Widget dan tumpukan widget.
+- Tumpukan widget dan widget langsung di beranda.
 - Cuaca opsional, mode desktop untuk layar lebar, dan pencarian kontak.
 
 ## Build

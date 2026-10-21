@@ -26,6 +26,7 @@ object Peluncur {
                 .addCategory(Intent.CATEGORY_LAUNCHER)
                 .setComponent(app.komponen)
                 .addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED),
+            zoom = p == null || p.bool("animasi", true),
         )
     }
 
@@ -79,10 +80,12 @@ object Peluncur {
         }
     }
 
-    private fun mulai(ctx: Context, intent: Intent) {
+    private fun mulai(ctx: Context, intent: Intent, zoom: Boolean = false) {
         try {
+            if (zoom) Transisi.membuka = true
             ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) {
+            Transisi.membuka = false
             Toast.makeText(ctx, "Tidak bisa dibuka", Toast.LENGTH_SHORT).show()
         }
     }
